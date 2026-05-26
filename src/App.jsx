@@ -8,6 +8,8 @@ console.log(' App: HMR ping');
 
 const STORAGE_KEY = "plan-progress";
 const TIMER_STORAGE_KEY = "plan-study-timer";
+const NOTES_STORAGE_KEY = "plan-study-notes";
+const CODE_NOTES_STORAGE_KEY = "plan-study-code-notes";
 const EMPTY_TIMER = { elapsedMs: 0, isRunning: false, startedAt: null };
 
 function normalizeTimer(timer) {
@@ -45,6 +47,28 @@ function loadProgress() {
 	}
 }
 
+function loadNotes() {
+	try {
+		const raw = localStorage.getItem(NOTES_STORAGE_KEY);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch (e) {
+		return {};
+	}
+}
+
+function loadCodeNotes() {
+	try {
+		const raw = localStorage.getItem(CODE_NOTES_STORAGE_KEY);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch (e) {
+		return {};
+	}
+}
+
 function initProgress() {
 	const obj = {};
 	plan.forEach((day) => {
@@ -57,6 +81,8 @@ export default function App() {
 	const [progress, setProgress] = useState(() => loadProgress() || initProgress());
 	const [activeDayIndex, setActiveDayIndex] = useState(0);
 	const [timers, setTimers] = useState(() => loadTimers());
+	const [notes, setNotes] = useState(() => loadNotes());
+	const [codeNotes, setCodeNotes] = useState(() => loadCodeNotes());
 	const [clockTick, setClockTick] = useState(() => Date.now());
 	const totalProblems = plan.reduce((sum, day) => sum + day.problems.length, 0);
 	const completedProblems = plan.reduce(
@@ -77,6 +103,9 @@ export default function App() {
 	const timerRemainingSeconds = timerSeconds % 60;
 	const timerDisplay = `${String(timerHours).padStart(2, "0")}:${String(timerMinutes).padStart(2, "0")}:${String(timerRemainingSeconds).padStart(2, "0")}`;
 	const timerLabel = `Day ${activeDay.day} time`;
+	const activeNote = notes[activeDay.day] || "";
+	const activeCodeNote = codeNotes[activeDay.day] || "";
+	const codeLineCount = Math.max(1, activeCodeNote.split("\n").length);
 
 	const goPreviousDay = () => {
 		setActiveDayIndex((current) => Math.max(0, current - 1));
@@ -101,6 +130,22 @@ export default function App() {
 			// ignore
 		}
 	}, [timers]);
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+		} catch (e) {
+			// ignore
+		}
+	}, [notes]);
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(CODE_NOTES_STORAGE_KEY, JSON.stringify(codeNotes));
+		} catch (e) {
+			// ignore
+		}
+	}, [codeNotes]);
 
 	useEffect(() => {
 		if (!activeTimer.isRunning) return undefined;
@@ -163,6 +208,28 @@ export default function App() {
 
 	const resetDay = (dayNum) => {
 		setProgress((p) => ({ ...p, [dayNum]: p[dayNum].map(() => false) }));
+	};
+
+	const updateActiveNote = (value) => {
+		setNotes((currentNotes) => ({
+			...currentNotes,
+			[activeDay.day]: value,
+		}));
+	};
+
+	const clearActiveNote = () => {
+		updateActiveNote("");
+	};
+
+	const updateActiveCodeNote = (value) => {
+		setCodeNotes((currentCodeNotes) => ({
+			...currentCodeNotes,
+			[activeDay.day]: value,
+		}));
+	};
+
+	const clearActiveCodeNote = () => {
+		updateActiveCodeNote("");
 	};
 
 	return (
@@ -272,8 +339,61 @@ export default function App() {
 				</section>
 			</main>
 
+			<section className="notesDock" aria-label="Day notes editor">
+				<div className="notesDockGrid">
+					<section className="notesPanel">
+						<div className="notesDockHeader">
+							<div>
+								<div className="notesEyebrow">Notes</div>
+								<h3>Day {activeDay.day}</h3>
+							</div>
+							<button type="button" className="notesClearButton" onClick={clearActiveNote} disabled={!activeNote.trim()}>
+								Clear
+							</button>
+						</div>
+						<textarea
+							className="notesEditor notesEditorPlain"
+							value={activeNote}
+							onChange={(event) => updateActiveNote(event.target.value)}
+							placeholder="Write normal study notes here"
+						/>
+					</section>
+
+					<section className="notesPanel">
+						<div className="notesDockHeader">
+							<div>
+								<div className="notesEyebrow">Code</div>
+								<h3>Day {activeDay.day}</h3>
+							</div>
+							<button type="button" className="notesClearButton" onClick={clearActiveCodeNote} disabled={!activeCodeNote.trim()}>
+								Clear
+							</button>
+						</div>
+						<div className="codeEditorFrame">
+							<div className="codeEditorToolbar">
+								<span>JavaScript</span>
+								<span>{codeLineCount} lines</span>
+							</div>
+							<div className="codeEditorBody">
+								<div className="codeGutter" aria-hidden="true">
+									{Array.from({ length: codeLineCount }, (_, index) => (
+										<span key={index}>{index + 1}</span>
+									))}
+								</div>
+								<textarea
+									className="notesEditor notesEditorCode"
+									value={activeCodeNote}
+									onChange={(event) => updateActiveCodeNote(event.target.value)}
+									placeholder="function solve() {\n  // write code here\n}"
+								/>
+							</div>
+						</div>
+					</section>
+				</div>
+			</section>
+
 			<footer>
-				<small>Local progress stored in browser localStorage.</small>
+				<small>Local progress, timer, notes, and code blocks are stored in browser localStorage.</small>
 			</footer>
 		</div>
 	);
